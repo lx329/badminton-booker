@@ -455,26 +455,43 @@ class BookingApp(QMainWindow):
             self.preheat_bm.start()
             self.preheat_page = self.preheat_bm.page
 
-            # 快速导航 (不等 networkidle，按钮出现即可)
-            print("[Preheat] Navigating to venue page...")
-            self.preheat_bm.navigate_and_wait_for_button()
-            self.preheat_page.wait_for_timeout(300)
-            print(f"[Preheat] Page URL: {self.preheat_page.url[:100]}")
-
-            # 处理登录
+            # 处理登录 (先检查是否在登录页)
             auth = Authenticator(
                 username=self.config.get("credentials", {}).get("username", ""),
                 password=self.config.get("credentials", {}).get("password", ""),
             )
 
-            if auth.is_on_login_page(self.preheat_page):
-                print("[Preheat] Login page detected")
+            # 快速导航
+            print("[Preheat] Navigating to venue page...")
+            btn_found = self.preheat_bm.navigate_and_wait_for_button()
+            self.preheat_page.wait_for_timeout(300)
+            print(f"[Preheat] Page URL: {self.preheat_page.url[:100]}")
+
+            if not btn_found and auth.is_on_login_page(self.preheat_page):
+                print("[Preheat] Login needed before navigation")
                 if auth.username:
                     self._log("预热: 自动登录中...")
-                    auth.login(self.preheat_page, auto_fill=True)
+                    logged_in = auth.login(self.preheat_page, auto_fill=True)
                 else:
                     self._log("预热: 需要手动登录，请在浏览器中输入账号密码")
                     self.status_signal.emit("请在浏览器中登录...")
+                    logged_in = auth.wait_for_manual_login(self.preheat_page, timeout=300)
+
+                if logged_in:
+                    print("[Preheat] Login done, re-navigating...")
+                    self.preheat_bm.navigate_and_wait_for_button()
+                    self.preheat_page.wait_for_timeout(300)
+                else:
+                    self._log("预热: 登录未完成，将在到达时间时重试")
+                    self.status_signal.emit("预热部分就绪 (未登录)...")
+                    return
+
+            elif auth.is_on_login_page(self.preheat_page):
+                # 按钮出现了但仍在登录页 (不太可能, 但处理下)
+                print("[Preheat] On login page despite button visible")
+                if auth.username:
+                    auth.login(self.preheat_page, auto_fill=True)
+                else:
                     auth.wait_for_manual_login(self.preheat_page, timeout=300)
             else:
                 print("[Preheat] Already logged in (cached auth)")
@@ -626,18 +643,22 @@ class BookingApp(QMainWindow):
                 )
 
                 print("[Booking] Navigating to target URL...")
-                bm.navigate_and_wait_for_button()
+                btn_found = bm.navigate_and_wait_for_button()
                 page.wait_for_timeout(300)
                 print(f"[Booking] Current URL: {page.url[:100]}")
 
-                if auth.is_on_login_page(page):
-                    print("[Booking] Login page detected")
+                if not btn_found and auth.is_on_login_page(page):
+                    print("[Booking] Login needed")
                     if auth.username:
                         self.log_signal.emit("自动登录中...")
                         auth.login(page, auto_fill=True)
                     else:
                         self.log_signal.emit("需要手动登录，请在浏览器中输入账号密码")
                         auth.wait_for_manual_login(page, timeout=300)
+                    # 登录完成，重新导航
+                    print("[Booking] Re-navigating after login...")
+                    bm.navigate_and_wait_for_button()
+                    page.wait_for_timeout(300)
                 else:
                     print("[Booking] Already logged in")
 

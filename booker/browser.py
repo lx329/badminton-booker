@@ -73,12 +73,18 @@ class BrowserManager:
         """
         快速导航到预约页面：不等待所有资源加载完毕，
         只要"立即预约"按钮出现就继续。
+        如果被重定向到CAS登录页，返回False让调用方处理登录。
         """
         print("[Browser] Fast navigating - waiting for button, not networkidle")
-        # 使用 domcontentloaded 而不是 networkidle (快很多)
         self.page.goto(BrowserManager.get_target_url(),
                         wait_until="domcontentloaded", timeout=timeout)
-        # 等待关键按钮出现 (最多等5秒)
-        btn = self.page.locator(".el-button--danger")
-        btn.wait_for(state="visible", timeout=5000)
-        print("[Browser] Venue button is visible - ready to click")
+        # 等待关键按钮出现 (短超时)
+        try:
+            btn = self.page.locator(".el-button--danger")
+            btn.wait_for(state="visible", timeout=5000)
+            print("[Browser] Venue button is visible - ready to click")
+            return True
+        except Exception:
+            # 按钮未出现 - 可能被重定向到登录页
+            print("[Browser] Button not found - may need login")
+            return False

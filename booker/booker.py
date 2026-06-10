@@ -247,24 +247,30 @@ class FlowBooker:
         # ── wait_manual_captcha: 等待用户手动完成验证码 ──
         if action == "wait_manual_captcha":
             timeout_sec = int(value) if value and value.isdigit() else 120
-            print(f"       ========================================")
-            print(f"       [!] 请在浏览器中手动拖动滑块完成验证码!")
-            print(f"       等待最长 {timeout_sec} 秒...")
-            print(f"       ========================================")
-            page = self._get_active_page()
+            target = self._get_active_locator()
+            # 先确认弹窗出现了
+            print(f"       等待验证码弹窗出现...")
+            dialog_sel = '.el-dialog:visible:has(.slider)'
+            try:
+                target.locator(dialog_sel).wait_for(state="visible", timeout=8000)
+                print(f"       ========================================")
+                print(f"       [!] 请在浏览器中手动拖动滑块完成验证码!")
+                print(f"       等待最长 {timeout_sec} 秒...")
+                print(f"       ========================================")
+            except Exception:
+                # 弹窗没有出现 - 可能不需要验证码
+                print(f"       [INFO] 验证码弹窗未出现 (可能无需验证)")
+                self.result["steps_completed"] += 1
+                return True
+            # 等待弹窗消失 (用户手动完成)
             for i in range(timeout_sec):
                 try:
-                    # 检查验证码弹窗是否已关闭
-                    target = self._get_active_locator()
-                    still_visible = target.locator(
-                        '.el-dialog:visible:has(.slider)'
-                    ).is_visible(timeout=500)
+                    still_visible = target.locator(dialog_sel).is_visible(timeout=500)
                     if not still_visible:
                         print(f"       [OK] 验证码已通过 (用户手动完成)")
                         self.result["steps_completed"] += 1
                         return True
                 except Exception:
-                    # 弹窗可能已关闭
                     print(f"       [OK] 验证码弹窗已消失")
                     self.result["steps_completed"] += 1
                     return True
