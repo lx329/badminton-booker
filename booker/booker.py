@@ -207,6 +207,12 @@ class FlowBooker:
             frame_idx = int(value) if value and value.isdigit() else 2
             ok = self._switch_to_frame(frame_idx)
             if ok:
+                # 等待 iframe 内容加载完成
+                try:
+                    self.current_frame.wait_for_load_state(
+                        "domcontentloaded", timeout=5000)
+                except Exception:
+                    pass
                 self._get_active_page().wait_for_timeout(wait_after)
                 if do_screenshot:
                     self._take_screenshot(f"step{step_idx}_frame{frame_idx}")
@@ -243,6 +249,14 @@ class FlowBooker:
                 print(f"       JS ERROR: {e}")
                 self.result["steps_failed"] += 1
                 return False
+
+        # ── switch_to_page: 切回主页面 (清除 iframe 上下文) ──
+        if action == "switch_to_page":
+            self.current_frame = None
+            self._get_active_page().wait_for_timeout(wait_after)
+            print(f"       Switched back to main page")
+            self.result["steps_completed"] += 1
+            return True
 
         # ── wait_manual_captcha: 等待用户手动完成验证码 ──
         if action == "wait_manual_captcha":

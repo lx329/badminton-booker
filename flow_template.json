@@ -1,6 +1,6 @@
 {
     "name": "北师羽毛球预约流程 (v1.1 - 极速预热版)",
-    "description": "最小化所有等待时间, 去掉截图, 极速抢场",
+    "description": "稳健选择器 + 极速抢场",
     "steps": [
         {
             "action": "click",
@@ -15,62 +15,63 @@
             "action": "switch_frame",
             "description": "步骤2: 切换到预约表格iframe(Frame 1)",
             "value": "1",
-            "wait_after": 300,
+            "wait_after": 1500,
             "screenshot": false
         },
         {
             "action": "click",
-            "description": "步骤3: 昌平校园",
-            "selector": "xpath=/html/body/div/div/div[3]/div[1]/div[1]/div/label[2]/span",
+            "description": "步骤3: 选择昌平校园",
+            "selector": ".el-radio-button__inner:has-text('昌平')",
             "fallback_selectors": [
+                "span:has-text('昌平')",
                 "[role='tab']:has-text('昌平')",
                 "text=昌平"
             ],
-            "wait_after": 300,
+            "wait_after": 500,
             "screenshot": false,
             "optional": true
         },
         {
             "action": "click",
-            "description": "步骤4: 羽毛球馆Tab",
-            "selector": "#tab-6018dde3-96aa-4b64-9480-44b116c8d6dd",
+            "description": "步骤4: 羽毛球馆Tab (动态ID, 用文本匹配)",
+            "selector": ".el-tabs__item:has-text('羽毛球')",
             "fallback_selectors": [
                 "[role='tab']:has-text('羽毛球')",
                 "text=羽毛球",
-                ".el-tabs__item:has-text('羽毛球')"
+                ".el-tabs__item.is-active:has-text('羽毛球')"
             ],
-            "wait_after": 300,
+            "wait_after": 500,
             "screenshot": false
         },
         {
             "action": "click",
-            "description": "步骤5: 打开日期选择器-点两次确保命中",
+            "description": "步骤5: 打开日期选择器",
             "selector": "input.el-input__inner",
             "fallback_selectors": [
                 "input[placeholder*='日期']",
                 "input[placeholder*='选择日期']"
             ],
-            "wait_after": 200,
+            "wait_after": 500,
             "screenshot": false
         },
         {
             "action": "click",
             "description": "步骤5b: 选择最后一个可用日期",
-            "selector": "xpath=(//td[@class='available'])[last()]",
+            "selector": "td.available:visible",
             "fallback_selectors": [
-                "td.available:visible",
+                "xpath=(//td[@class='available'])[last()]",
                 "td:not(.disabled):visible"
             ],
-            "wait_after": 300,
+            "wait_after": 500,
             "screenshot": false,
             "optional": true
         },
         {
             "action": "js_click",
-            "description": "步骤6: 点击格子",
+            "description": "步骤6: 智能扫描可用格子并点击 (遍历所有行列)",
             "selector": "",
-            "value": "(()=>{const row={{grid_row}},col={{grid_col}},row2={{grid_row_2}};const getCell=(r,c)=>document.evaluate('/html/body/div[1]/div/div[3]/div[3]/div[1]/div[2]/div['+r+']/div[2]/div['+c+']',document,null,9,null).singleNodeValue;const c1=getCell(row,col);const c2=getCell(row2,col);if(!c1||!c2)return'cell not found';if(c1.classList.contains('qtsy')||c2.classList.contains('qtsy'))return'cell occupied';c1.click();setTimeout(()=>c2.click(),80);return'clicked r'+row+'c'+col;})()",
-            "wait_after": 300,
+            "value": "(()=>{const rows=document.querySelectorAll('.conTopBox');for(let ri=0;ri<rows.length-1;ri++){const timeLabel=rows[ri].querySelector('.search1');if(!timeLabel)continue;const hour=parseInt(timeLabel.textContent);if(hour<{{grid_row}}+7)continue;const cells=rows[ri].querySelectorAll('.time1');const nextCells=rows[ri+1]?rows[ri+1].querySelectorAll('.time1'):null;for(let ci=0;ci<cells.length;ci++){const c1=cells[ci];const c2=nextCells?nextCells[ci]:null;if(c1.classList.contains('qtsy'))continue;if(c2&&c2.classList.contains('qtsy'))continue;c1.click();if(c2)setTimeout(()=>c2.click(),80);return'clicked row'+(ri+1)+' col'+(ci+1);}}return'all occupied or out of range';})()",
+            "wait_after": 800,
             "screenshot": false
         },
         {
@@ -82,12 +83,18 @@
                 "text=预定",
                 ".topRtButton"
             ],
-            "wait_after": 600,
+            "wait_after": 800,
+            "screenshot": false
+        },
+        {
+            "action": "switch_to_page",
+            "description": "步骤7b: 切回主页面 (提交弹窗在主页面)",
+            "wait_after": 500,
             "screenshot": false
         },
         {
             "action": "click",
-            "description": "步骤8: 点击支付/提交按钮",
+            "description": "步骤8: 点击支付/提交按钮 (可能在主页面或iframe)",
             "selector": ".el-button--primary.el-button--medium",
             "fallback_selectors": [
                 ".el-button--primary",
@@ -100,7 +107,7 @@
         },
         {
             "action": "wait_manual_captcha",
-            "description": "步骤9: 等待用户手动完成验证码(拖动滑块让图片旋转到正确角度)",
+            "description": "步骤9: 等待用户手动完成验证码",
             "timeout": 120,
             "wait_after": 2000,
             "screenshot": false
