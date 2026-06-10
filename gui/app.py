@@ -47,6 +47,7 @@ class BookingApp(QMainWindow):
 
         self.scheduler = None
         self.booking_running = False
+        self.preheat_active = False
         self.config = self._load_config()
 
         self.status_signal.connect(self._set_status)
@@ -432,6 +433,52 @@ class BookingApp(QMainWindow):
         end_h, end_m = divmod(end_minutes, 60)
         return f"{start_h:02d}:{start_m:02d}-{end_h:02d}:{end_m:02d}"
 
+    def _start_preheat(self):
+        """预热：提前验证登录并缓存 auth，到点秒开浏览器。"""
+        if self.preheat_active:
+            return
+        self.preheat_active = True
+        self._log("预热：验证登录状态...")
+        self.status_signal.emit("预热中 - 验证登录...")
+
+        try:
+            from booker.browser import BrowserManager
+            from booker.authenticator import Authenticator
+
+            bm = BrowserManager(headless=False)
+            bm.start()
+
+            auth = Authenticator(
+                username=self.config.get("credentials", {}).get("username", ""),
+                password=self.config.get("credentials", {}).get("password", ""),
+            )
+
+            btn_found = bm.navigate_and_wait_for_button()
+            bm.page.wait_for_timeout(300)
+
+            if not btn_found and auth.is_on_login_page(bm.page):
+                self._log("预热: 需要登录...")
+                if auth.username:
+                    auth.login(bm.page, auto_fill=True)
+                else:
+                    self.status_signal.emit("请在浏览器中登录...")
+                    auth.wait_for_manual_login(bm.page, timeout=300)
+                bm.navigate_and_wait_for_button()
+                bm.page.wait_for_timeout(300)
+
+            bm.save_auth_state()
+            bm.close()
+            self._log("预热完成：auth 已缓存")
+            self.status_signal.emit("预热就绪 - 等待启动时间...")
+
+        except Exception as e:
+            self._log(f"预热失败: {e} (将在到达时间重试)")
+        finally:
+            self.preheat_active = False
+
+    def _cleanup_preheat(self):
+        self.preheat_active = False
+
     def _tick_countdown(self):
         if self.scheduler and self.scheduler.running:
             cd = self.scheduler.get_countdown_str()
@@ -477,11 +524,14 @@ class BookingApp(QMainWindow):
         target_dt = datetime.strptime(start_dt, "%Y-%m-%d %H:%M:%S")
         now = datetime.now()
         if target_dt <= now:
-            # 时间已过，立即执行（通过 QTimer 延迟到事件循环中，避免阻塞 GUI）
+            # 时间已过，立即执行
             self._log(f"启动时间 {start_dt} 已过，立即开始预约...")
             self.status_signal.emit("立即开始预约...")
             QTimer.singleShot(500, lambda: self._execute_booking(booking_config))
         else:
+            # 预热：提前验证登录缓存 auth
+            self._start_preheat()
+
             self.scheduler = Scheduler(
                 target_time=start_dt,
                 callback=lambda: self._execute_booking(booking_config),
@@ -499,6 +549,7 @@ class BookingApp(QMainWindow):
         if self.scheduler:
             self.scheduler.stop()
         self.countdown_timer.stop()
+        self._cleanup_preheat()
         self._log("预约已取消")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
@@ -531,13 +582,12 @@ class BookingApp(QMainWindow):
                 password=self.config.get("credentials", {}).get("password", ""),
             )
 
-            print("[Booking] Navigating to target URL...")
-            bm.page.goto(BrowserManager.get_target_url(),
-                         wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(1500)
+            print("[Booking] Fast navigating to target URL...")
+            btn_found = bm.navigate_and_wait_for_button()
+            page.wait_for_timeout(300)
             print(f"[Booking] Current URL: {page.url[:100]}")
 
-            if auth.is_on_login_page(page):
+            if not btn_found and auth.is_on_login_page(page):
                 print("[Booking] Login page detected")
                 if auth.username:
                     self.log_signal.emit("自动登录中...")
@@ -545,6 +595,9 @@ class BookingApp(QMainWindow):
                 else:
                     self.log_signal.emit("需要手动登录，请在浏览器中输入账号密码")
                     auth.wait_for_manual_login(page, timeout=300)
+                # 登录成功，重新导航
+                bm.navigate_and_wait_for_button()
+                page.wait_for_timeout(300)
             else:
                 print("[Booking] Already logged in")
 
@@ -576,6 +629,7 @@ class BookingApp(QMainWindow):
             self.booking_done_signal.emit()
 
     def _on_booking_done(self):
+        self._cleanup_preheat()
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.countdown_timer.stop()
@@ -590,8 +644,10 @@ class BookingApp(QMainWindow):
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 self._stop_booking()
+                self._cleanup_preheat()
                 event.accept()
             else:
                 event.ignore()
         else:
+            self._cleanup_preheat()
             event.accept()
