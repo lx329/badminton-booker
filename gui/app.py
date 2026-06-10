@@ -584,7 +584,8 @@ class BookingApp(QMainWindow):
 
             print("[Booking] Fast navigating to target URL...")
             btn_found = bm.navigate_and_wait_for_button()
-            page.wait_for_timeout(300)
+            # 等 Vue 渲染完毕 (按钮可见 ≠ 页面可交互)
+            page.wait_for_timeout(2000)
             print(f"[Booking] Current URL: {page.url[:100]}")
 
             if not btn_found and auth.is_on_login_page(page):
