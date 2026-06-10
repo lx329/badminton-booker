@@ -1,0 +1,109 @@
+{
+    "name": "北师羽毛球预约流程 (v1.0 稳定版 - 手动验证码)",
+    "description": "最小化所有等待时间, 去掉截图, 极速抢场",
+    "steps": [
+        {
+            "action": "click",
+            "description": "步骤1: 点击场馆预约",
+            "selector": ".el-button--danger",
+            "fallback_selectors": ["button:has-text('预约')", "text=场馆预约"],
+            "wait_after": 2000,
+            "screenshot": false,
+            "expect_new_page": true
+        },
+        {
+            "action": "switch_frame",
+            "description": "步骤2: 切换到预约表格iframe(Frame 1)",
+            "value": "1",
+            "wait_after": 300,
+            "screenshot": false
+        },
+        {
+            "action": "click",
+            "description": "步骤3: 昌平校园",
+            "selector": "xpath=/html/body/div/div/div[3]/div[1]/div[1]/div/label[2]/span",
+            "fallback_selectors": [
+                "[role='tab']:has-text('昌平')",
+                "text=昌平"
+            ],
+            "wait_after": 300,
+            "screenshot": false,
+            "optional": true
+        },
+        {
+            "action": "click",
+            "description": "步骤4: 羽毛球馆Tab",
+            "selector": "#tab-6018dde3-96aa-4b64-9480-44b116c8d6dd",
+            "fallback_selectors": [
+                "[role='tab']:has-text('羽毛球')",
+                "text=羽毛球",
+                ".el-tabs__item:has-text('羽毛球')"
+            ],
+            "wait_after": 300,
+            "screenshot": false
+        },
+        {
+            "action": "click",
+            "description": "步骤5: 打开日期选择器-点两次确保命中",
+            "selector": "input.el-input__inner",
+            "fallback_selectors": [
+                "input[placeholder*='日期']",
+                "input[placeholder*='选择日期']"
+            ],
+            "wait_after": 200,
+            "screenshot": false
+        },
+        {
+            "action": "click",
+            "description": "步骤5b: 选择最后一个可用日期",
+            "selector": "xpath=(//td[@class='available'])[last()]",
+            "fallback_selectors": [
+                "td.available:visible",
+                "td:not(.disabled):visible"
+            ],
+            "wait_after": 300,
+            "screenshot": false,
+            "optional": true
+        },
+        {
+            "action": "js_click",
+            "description": "步骤6: 点击格子",
+            "selector": "",
+            "value": "(()=>{const row={{grid_row}},col={{grid_col}},row2={{grid_row_2}};const getCell=(r,c)=>document.evaluate('/html/body/div[1]/div/div[3]/div[3]/div[1]/div[2]/div['+r+']/div[2]/div['+c+']',document,null,9,null).singleNodeValue;const c1=getCell(row,col);const c2=getCell(row2,col);if(!c1||!c2)return'cell not found';if(c1.classList.contains('qtsy')||c2.classList.contains('qtsy'))return'cell occupied';c1.click();setTimeout(()=>c2.click(),80);return'clicked r'+row+'c'+col;})()",
+            "wait_after": 300,
+            "screenshot": false
+        },
+        {
+            "action": "click",
+            "description": "步骤7: 点击预定按钮",
+            "selector": ".topRtButton.butBlue",
+            "fallback_selectors": [
+                "button:has-text('预定')",
+                "text=预定",
+                ".topRtButton"
+            ],
+            "wait_after": 600,
+            "screenshot": false
+        },
+        {
+            "action": "click",
+            "description": "步骤8: 点击支付/提交按钮",
+            "selector": ".el-button--primary.el-button--medium",
+            "fallback_selectors": [
+                ".el-button--primary",
+                "button:has-text('提交')",
+                "button:has-text('提交订单')",
+                "button:has-text('确认')"
+            ],
+            "wait_after": 1500,
+            "screenshot": false
+        },
+        {
+            "action": "wait_manual_captcha",
+            "description": "步骤9: 等待用户手动完成验证码(拖动滑块让图片旋转到正确角度)",
+            "timeout": 120,
+            "wait_after": 2000,
+            "screenshot": false
+        }
+    ]
+}

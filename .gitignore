@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Sensitive data
+auth_state.json
+config*.json
+
+# Screenshots & test images
+*.png
+screenshots/
+
+# Debug HTML snapshots
+grid_*.html
+
+# Test scripts
+test_*.py
+check_after_book.py
+scan_after_book.py
+dump_table.py
+record_flow.py
+map_page.py
+quick_map.py
+explore_report.json
+
+# Old versions
+badminton_user.py
+badminton_user_fixed.py
+
+# IDE
+.vscode/
+.idea/
