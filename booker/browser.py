@@ -68,3 +68,17 @@ class BrowserManager:
     def get_target_url() -> str:
         return ("https://onevpn.bnu.edu.cn/https/77726476706e69737468656265737421"
                 "e4ee429b69326645300d8db9d6562d/www/dd/vue/spa/zhcg#/")
+
+    def navigate_and_wait_for_button(self, timeout: int = 15000):
+        """
+        快速导航到预约页面：不等待所有资源加载完毕，
+        只要"立即预约"按钮出现就继续。
+        """
+        print("[Browser] Fast navigating - waiting for button, not networkidle")
+        # 使用 domcontentloaded 而不是 networkidle (快很多)
+        self.page.goto(BrowserManager.get_target_url(),
+                        wait_until="domcontentloaded", timeout=timeout)
+        # 等待关键按钮出现 (最多等5秒)
+        btn = self.page.locator(".el-button--danger")
+        btn.wait_for(state="visible", timeout=5000)
+        print("[Browser] Venue button is visible - ready to click")
