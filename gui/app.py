@@ -47,8 +47,10 @@ class BookingApp(QMainWindow):
 
         self.scheduler = None
         self.booking_running = False
-        self.preheat_active = False
         self.config = self._load_config()
+
+        # 预热 (pre-heat): 提前验证登录缓存 auth
+        self.preheat_active = False
 
         self.status_signal.connect(self._set_status)
         self.log_signal.connect(self._append_log)
@@ -434,17 +436,20 @@ class BookingApp(QMainWindow):
         return f"{start_h:02d}:{start_m:02d}-{end_h:02d}:{end_m:02d}"
 
     def _start_preheat(self):
-        """预热：提前验证登录并缓存 auth，到点秒开浏览器。"""
+        """预热：提前打开浏览器完成登录并缓存 auth，
+        到点后用缓存 auth 秒开浏览器（省去登录时间）。"""
         if self.preheat_active:
             return
+
         self.preheat_active = True
-        self._log("预热：验证登录状态...")
+        self._log("预热启动：正在验证登录状态...")
         self.status_signal.emit("预热中 - 验证登录...")
 
         try:
             from booker.browser import BrowserManager
             from booker.authenticator import Authenticator
 
+            # 用临时浏览器检查登录状态
             bm = BrowserManager(headless=False)
             bm.start()
 
@@ -453,30 +458,45 @@ class BookingApp(QMainWindow):
                 password=self.config.get("credentials", {}).get("password", ""),
             )
 
+            # 快速导航
+            print("[Preheat] Checking login state...")
             btn_found = bm.navigate_and_wait_for_button()
             bm.page.wait_for_timeout(300)
+            print(f"[Preheat] Page URL: {bm.page.url[:100]}")
 
             if not btn_found and auth.is_on_login_page(bm.page):
-                self._log("预热: 需要登录...")
+                print("[Preheat] Login needed - handling now...")
+                self._log("预热: 需要登录，正在处理...")
                 if auth.username:
-                    auth.login(bm.page, auto_fill=True)
+                    logged_in = auth.login(bm.page, auto_fill=True)
                 else:
+                    self._log("预热: 请在浏览器中手动登录")
                     self.status_signal.emit("请在浏览器中登录...")
-                    auth.wait_for_manual_login(bm.page, timeout=300)
-                bm.navigate_and_wait_for_button()
-                bm.page.wait_for_timeout(300)
+                    logged_in = auth.wait_for_manual_login(bm.page, timeout=300)
+
+                if logged_in:
+                    print("[Preheat] Login done")
+                    bm.navigate_and_wait_for_button()
+                    bm.page.wait_for_timeout(300)
+            else:
+                print("[Preheat] Auth cache is valid - no login needed")
 
             bm.save_auth_state()
-            bm.close()
-            self._log("预热完成：auth 已缓存")
+            bm.close()  # 关闭预热浏览器（避免 greenlet 跨线程问题）
+
+            self._log("预热完成：auth 已缓存，到点秒开浏览器...")
             self.status_signal.emit("预热就绪 - 等待启动时间...")
 
         except Exception as e:
-            self._log(f"预热失败: {e} (将在到达时间重试)")
+            print(f"[Preheat] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._log(f"预热: {e} (将在到达时间重试)")
         finally:
-            self.preheat_active = False
+            self.preheat_active = False  # 预热完成，标记为非活跃
 
     def _cleanup_preheat(self):
+        """清理预热状态"""
         self.preheat_active = False
 
     def _tick_countdown(self):
@@ -518,7 +538,6 @@ class BookingApp(QMainWindow):
         }
 
         from booker.scheduler import Scheduler
-        from datetime import datetime
 
         # 检查启动时间是否已过
         target_dt = datetime.strptime(start_dt, "%Y-%m-%d %H:%M:%S")
@@ -529,7 +548,7 @@ class BookingApp(QMainWindow):
             self.status_signal.emit("立即开始预约...")
             QTimer.singleShot(500, lambda: self._execute_booking(booking_config))
         else:
-            # 预热：提前验证登录缓存 auth
+            # ── 预热：立即打开浏览器导航到预约页面，到点秒点按钮 ──
             self._start_preheat()
 
             self.scheduler = Scheduler(
@@ -565,46 +584,45 @@ class BookingApp(QMainWindow):
         try:
             print("[Booking] === Starting booking execution ===")
             self.log_signal.emit("=" * 40)
-            self.log_signal.emit("开始执行预约流程...")
 
             from booker.browser import BrowserManager
             from booker.authenticator import Authenticator
             from booker.booker import FlowBooker
 
-            print("[Booking] Launching browser...")
+            # 始终使用新建浏览器 (用缓存的 auth 秒开)
+            self.log_signal.emit("正在打开浏览器...")
             bm = BrowserManager(headless=False)
             bm.start()
             page = bm.page
-            print("[Booking] Browser launched")
 
             auth = Authenticator(
                 username=self.config.get("credentials", {}).get("username", ""),
                 password=self.config.get("credentials", {}).get("password", ""),
             )
 
-            print("[Booking] Fast navigating to target URL...")
+            # 快速导航 (auth 已缓存，不会重定向到登录页)
+            print("[Booking] Fast navigating to venue page...")
             btn_found = bm.navigate_and_wait_for_button()
-            # 等 Vue 渲染完毕 (按钮可见 ≠ 页面可交互)
-            page.wait_for_timeout(2000)
-            print(f"[Booking] Current URL: {page.url[:100]}")
+            page.wait_for_timeout(300)
+            print(f"[Booking] URL: {page.url[:100]}")
 
             if not btn_found and auth.is_on_login_page(page):
-                print("[Booking] Login page detected")
+                print("[Booking] Login needed (auth expired)")
                 if auth.username:
-                    self.log_signal.emit("自动登录中...")
+                    self.log_signal.emit("登录中...")
                     auth.login(page, auto_fill=True)
                 else:
                     self.log_signal.emit("需要手动登录，请在浏览器中输入账号密码")
                     auth.wait_for_manual_login(page, timeout=300)
-                # 登录成功，重新导航
                 bm.navigate_and_wait_for_button()
                 page.wait_for_timeout(300)
+                bm.save_auth_state()
             else:
-                print("[Booking] Already logged in")
+                print("[Booking] Auth valid, button visible")
 
-            bm.save_auth_state()
-
+            # 执行预约流程
             print(f"[Booking] Running flow booker: {booking_config}")
+            self.log_signal.emit("开始执行预约流程...")
             booker = FlowBooker(page, booking_config)
             result = booker.run()
             print(f"[Booking] Flow result: {result.get('message')}")
