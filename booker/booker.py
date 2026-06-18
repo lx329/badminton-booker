@@ -428,16 +428,15 @@ class FlowBooker:
         for i, step in enumerate(steps):
             self.page.wait_for_timeout(50)
 
-            # 检查是否有新页面打开
-            expect_new = step.get("expect_new_page", False)
-            if expect_new and hasattr(self, '_new_pages') and self._new_pages:
+            ok = self._execute_step(step, i + 1)
+
+            # 步骤执行后检查是否有新页面打开 (新页面在步骤执行期间才出现)
+            if hasattr(self, '_new_pages') and self._new_pages:
                 new_page = self._new_pages[-1]
                 self.page = new_page
                 print(f"       Switched to new page: {new_page.url[:120]}")
-                new_page.wait_for_timeout(1500)
+                self.page.wait_for_timeout(2000)  # 等 iframe 加载
                 self._new_pages = []
-
-            ok = self._execute_step(step, i + 1)
 
             if not ok:
                 recent = self.result["steps_failed"]
