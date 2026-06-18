@@ -28,6 +28,26 @@ explore_report.json
 badminton_user.py
 badminton_user_fixed.py
 
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Build scripts
+build_*.py
+manual_booking.py
+
+# Logs
+logs/
+
+# Experimental (in development, not stable)
+booker/captcha_solver_v2.py
+booker/captcha_solver_v3.py
+booker/captcha_solver_v4.py
+CAPTCHA_SOLVER_README.md
+PLAN_captcha_fix.md
+flow_template_manual.json
+
 # IDE
 .vscode/
 .idea/
