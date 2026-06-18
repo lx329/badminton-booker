@@ -136,6 +136,7 @@ class Scheduler:
 
             # 更新状态
             countdown = self.get_countdown_str()
+            status = None
             if remaining <= self.advance_seconds:
                 status = f"即将开始预约！预热中... {countdown}"
             elif remaining < 60:
@@ -145,7 +146,8 @@ class Scheduler:
                 if int(remaining) % 30 == 0:
                     status = f"等待中... 距目标时间 {countdown}"
 
-            self._update_status(status)
+            if status:
+                self._update_status(status)
 
             # 睡眠间隔：最后1分钟每秒检查一次，之前每5秒检查一次
             if remaining <= 60:
